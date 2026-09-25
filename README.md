@@ -1,70 +1,84 @@
-# Getting Started with Create React App
+# Matinee ✦
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+**Tell it your mood, get three movies worth watching tonight.**
 
-## Available Scripts
+Most movie apps show an endless grid and leave you scrolling for 40 minutes. Matinee asks two questions (how you feel and how much time you have) and hands you three "tickets". Save what looks good, mark what you've seen, and it never shows you those again.
 
-In the project directory, you can run:
+## Requirements
 
-### `npm start`
+### Must have (v1, built)
+| # | Requirement |
+|---|---|
+| R1 | Pick a **mood** (9 options) and a **time budget** (any / under 1½h / ~2h / all night) |
+| R2 | Optional **"watching with kids"** filter (PG and below, no horror, thriller, crime or war) |
+| R3 | **Roll** returns 3 random, well-rated picks, each with a one-line reason. **Roll again** never repeats them |
+| R4 | On each pick: **watch trailer** (in-page), **save**, **seen it**, **not for me** |
+| R5 | Seen and skipped movies are **never picked again** |
+| R6 | **Saved** page split into *Up next* and *Watched* |
+| R7 | **Movie page**: synopsis, runtime, rating, director, cast, trailer, **where to stream in your country**, similar movies |
+| R8 | **Search** by title as a fallback |
+| R9 | Works on phones; light ("matinee") and dark ("late show") themes; keyboard accessible |
+| R10 | No accounts: everything is stored on the device |
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+### Later (not built)
+- Sync across devices (accounts and a hosted database)
+- Filter by the streaming services you own
+- "Movie night" shared link where friends vote on the three picks
+- "Hidden gems" mode (high rating, low popularity)
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Design
 
-### `npm test`
+**Theme: warm retro cinema.** A picture house from the 1950s rather than a streaming service.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+| Token | Matinee (light) | Late show (dark) | Used for |
+|---|---|---|---|
+| `--bg` | `#f4ead8` cream paper | `#16100d` projector booth | page |
+| `--accent` | `#8c1c2b` velvet curtain | `#d1455c` | buttons, selected chips, logo |
+| `--brass` | `#b7832a` | `#e2b45c` | marquee bulbs, labels, genre tags |
 
-### `npm run build`
+- **Type:** Fraunces (display serif, italic for voice), DM Sans (body), DM Mono ("ADMIT ONE" labels)
+- **Details:** film-grain overlay, dotted "bulb" borders on the header and footer, picks styled as tear-off tickets with punched notches, slightly tilted posters, sepia backdrops
+- **Motion ([React Bits](https://reactbits.dev), copied into `src/components/bits/`):** LightRays projector beam behind the headline, RotatingText mood phrases, a spinning CircularText "Admit one" badge, a ScrollVelocity marquee of trending titles, a StarBorder chasing light on the Roll button, and a TiltedCard poster on movie pages. All of these are skipped when the OS asks for reduced motion
+- All colours are CSS variables in [`src/index.css`](src/index.css). A theme only redefines the tokens
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Architecture
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+```
+api/
+  tmdb.js             server-side TMDB proxy: adds the key, allows only the endpoints the app uses
+netlify/functions/
+  tmdb.js             Netlify entry point for api/tmdb.js
+src/
+  main.jsx            routes + layout (header / page / footer)
+  api.js              tmdb() → /api/tmdb, img() URL helper, useTmdb() hook
+  picker.js           pure logic: moods → TMDB discover params, random fresh picks
+  picker.test.js      node:test checks for picker.js
+  library.js          saved / seen / skipped store (localStorage + useSyncExternalStore)
+  pages/
+    Tonight.jsx       /              mood form → 3 tickets
+    Movie.jsx         /movies/:id    details, cast, providers, similar
+    Saved.jsx         /saved         up next / watched
+    Search.jsx        /search?q=     title search
+  components/         Header, Footer, TicketCard, MovieCard, MovieList, TrailerButton, Actions
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+**Data flow:** Tonight builds a `/discover/movie` query from the mood (genres ORed, excluded genres, runtime, rating ≥ 6.3 with 150+ votes). It fetches a random page from the first five, drops anything seen, skipped or already shown, and picks 3 at random. The movie page gets details, videos, credits, recommendations and watch providers in **one** request (`append_to_response`). Region comes from the browser language (`en-KE` → Kenya).
 
-### `npm run eject`
+**API key:** the browser never sees one. It calls `/api/tmdb`, a Netlify Function (`netlify/functions/tmdb.js` → `api/tmdb.js`, the same code Vite runs in dev) that adds `TMDB_KEY` from the server environment.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+**Stack:** React 19, React Router 7, Vite 7, `motion` and `ogl` (for React Bits). No state library, no UI kit, no CSS framework.
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## Run it
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+The key is set **once by whoever hosts the app**. People using the app never need one.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+```sh
+echo "TMDB_KEY=your_key" > .env.local   # free key: themoviedb.org/settings/api
+npm install
+npm run dev        # http://localhost:5173
+npm test           # picker + proxy checks
+```
 
-## Learn More
+**Deploy on Netlify:** `netlify.toml` has the build settings and routes `/api/tmdb` to the function. Add `TMDB_KEY` under *Site configuration → Environment variables*, then deploy.
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Movie data from [TMDB](https://www.themoviedb.org). This product uses the TMDB API but is not endorsed or certified by TMDB.
